@@ -26,15 +26,19 @@ public class GuessNumberPage extends JFrame{
     private JLabel numberTipLabel;
     private JLabel timerLabel;
     private JLabel entryLabel;
+    private JButton endButton;
     private Integer numberOfGuess, solutionNumber;
     private final DefaultTableModel model = new DefaultTableModel();
     private long timeStartGame;
+    private String defaultNickName = "";
 
     public GuessNumberPage() {
         setupFrame();
+        endButton.addActionListener(e -> endGame());
         startButton.addActionListener(e -> startNewGame());
         guessButton.addActionListener(e -> guessNumber());
         guessNumberTextField.addActionListener(e -> guessNumber());
+        mainPanel.getRootPane().setDefaultButton(startButton);
     }
 
     private void setupFrame() {
@@ -53,8 +57,7 @@ public class GuessNumberPage extends JFrame{
 
         timeStartGame = Instant.now().toEpochMilli();
         numberOfGuess = 0;
-        solutionNumber = rand.nextInt(10000) + 1;
-
+        solutionNumber = rand.nextInt(8192) + 1;
         timer.start();
         numberTipLabel.setText("");
         numberOfGuessLabel.setText("Numer próby: 0");
@@ -62,33 +65,34 @@ public class GuessNumberPage extends JFrame{
         guessNumberTextField.grabFocus();
     }
 
+    private void endGame() {
+        timer.stop();
+        numberTipLabel.setText("Niestety nie ukończyłeś gry");
+        setVisibleTheGuessingWidgets(false);
+    }
+
     private void setDefaultSettingsTable() {
         resultsTable.setModel(model);
         resultsTable.getTableHeader().setReorderingAllowed(false);
         model.addColumn("Id");
+        model.addColumn("Nick");
         model.addColumn("Kiedy");
         model.addColumn("Ilość prób");
         model.addColumn("Czas zgdywania");
         model.addColumn("Jaki numer był zgadywany");
         resultsTable.getColumnModel().getColumn(0).setPreferredWidth(10);
-        resultsTable.getColumnModel().getColumn(1).setPreferredWidth(100);
-        resultsTable.getColumnModel().getColumn(4).setPreferredWidth(150);
+        resultsTable.getColumnModel().getColumn(1).setPreferredWidth(75);
+        resultsTable.getColumnModel().getColumn(2).setPreferredWidth(100);
+        resultsTable.getColumnModel().getColumn(5).setPreferredWidth(125);
     }
 
     private void guessNumber() {
         try {
             Integer guessNumber = Validators.getGuessNumber(guessNumberTextField.getText());
-            numberOfGuess++;
-            numberOfGuessLabel.setText("Numer próby: "+numberOfGuess);
+            numberOfGuessLabel.setText("Numer próby: "+(++numberOfGuess));
             if(guessNumber < solutionNumber) numberTipLabel.setText("Za mało!!!");
             else if(guessNumber > solutionNumber) numberTipLabel.setText("Za dużo!!!");
-            else {
-                numberTipLabel.setText("SUKCES!!! Szukana liczba to "+guessNumber+"!!!");
-                setVisibleTheGuessingWidgets(false);
-                timer.stop();
-                timerLabel.setText("Czas: "+getGameTimeInSeconds());
-                addRowToTableWithResults();
-            }
+            else afterGuessingTheNumber();
         } catch (GuessNumberExceptions e) {
             numberTipLabel.setText(e.toString());
         }
@@ -96,10 +100,20 @@ public class GuessNumberPage extends JFrame{
         guessNumberTextField.grabFocus();
     }
 
+    private void afterGuessingTheNumber() {
+        numberTipLabel.setText("SUKCES!!! Szukana liczba to "+solutionNumber+"!!!");
+        setVisibleTheGuessingWidgets(false);
+        timer.stop();
+        timerLabel.setText("Czas: "+getGameTimeInSeconds());
+        addRowToResultsTable();
+    }
+
     private void setVisibleTheGuessingWidgets(Boolean visible) {
         guessNumberTextField.setVisible(visible);
         guessButton.setVisible(visible);
         entryLabel.setVisible(visible);
+        endButton.setVisible(visible);
+        startButton.setVisible(!visible);
     }
 
     Timer timer = new Timer(100, new ActionListener() {
@@ -117,21 +131,25 @@ public class GuessNumberPage extends JFrame{
         return time / 1000;
     }
 
-    private void addRowToTableWithResults() {
+    private void addRowToResultsTable() {
         Float time = getGameTimeInSeconds();
         String nowDate = getNowDate();
-        Object[] row = {nowDate, numberOfGuess, time, solutionNumber};
+        String nickPlayer = JOptionPane.showInputDialog(this, "Podaj nick:", defaultNickName);
+        defaultNickName = "";
+        if(nickPlayer == null || nickPlayer.equals("")) nickPlayer = "Gall Anonim";
+        else defaultNickName = nickPlayer;
+        Object[] row = {nickPlayer, nowDate, numberOfGuess, time, solutionNumber};
         addRowAndSortTableWithResults(row);
         addRowToFile(row);
     }
 
     private void addRowToFile(Object[] row) {
         try {
-            FileWriter myWriter = new FileWriter("results.txt", true);
-            myWriter.write(row[0]+";"+row[1]+";"+row[2]+";"+row[3]+"\n");
-            myWriter.close();
+            FileWriter file = new FileWriter("results.txt", true);
+            file.write(row[0]+";"+row[1]+";"+row[2]+";"+row[3]+";"+row[4]+"\n");
+            file.close();
         } catch (IOException e) {
-            System.out.println("Nie można zapisać wyniku do pliku.");
+            JOptionPane.showMessageDialog(this, "Nie udało się zapisać wyniku do pliku",  "Błąd pliku", JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -149,7 +167,8 @@ public class GuessNumberPage extends JFrame{
                     model.getValueAt(0, 1),
                     model.getValueAt(0, 2),
                     model.getValueAt(0, 3),
-                    model.getValueAt(0, 4)
+                    model.getValueAt(0, 4),
+                    model.getValueAt(0, 5)
             };
             model.removeRow(0);
             valFromTable.add(row);
@@ -161,54 +180,57 @@ public class GuessNumberPage extends JFrame{
         valFromTable.sort(new Comparator<Object[]>() {
             @Override
             public int compare(Object[] lhs, Object[] rhs) {
-                int numberGuess1 = (Integer)lhs[1];
-                int numberGuess2 = (Integer)rhs[1];
+                int numberGuess1 = (Integer)lhs[2];
+                int numberGuess2 = (Integer)rhs[2];
                 if(numberGuess1 < numberGuess2) return -1;
                 if(numberGuess1 > numberGuess2) return 1;
 
-                float time1 = (Float)lhs[2];
-                float time2 = (Float)rhs[2];
+                float time1 = (Float)lhs[3];
+                float time2 = (Float)rhs[3];
                 if(time1 < time2) return -1;
                 if(time1 > time2) return 1;
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd HH:mm:ss");
-                Date date1 = null;
+                Date date1, date2;
                 try {
-                    date1 = sdf.parse((String)rhs[0]);
-                } catch (ParseException e) {
-                    return -1;
-                }
-                Date date2 = null;
+                    date1 = sdf.parse((String)rhs[1]);
+                } catch (ParseException e) {return -1;}
                 try {
-                    date2 = sdf.parse((String)lhs[0]);
-                } catch (ParseException e) {
-                    return 1;
-                }
+                    date2 = sdf.parse((String)lhs[1]);
+                } catch (ParseException e) {return 1;}
                 return date2.compareTo(date1);
             }
         });
         for(int i=0; i<valFromTable.size(); i++) {
             Object[] el = valFromTable.get(i);
-            Object[] row = {i+1, el[0], el[1], el[2], el[3]};
+            Object[] row = {i+1, el[0], el[1], el[2], el[3], el[4]};
             model.addRow(row);
         }
     }
 
     private void loadResultsFromFile() {
-        File myObj = new File("results.txt");
-        if (myObj.exists()) {
+        File file = new File("results.txt");
+        if (file.exists()) {
             try {
-                Scanner myReader = new Scanner(myObj);
+                Scanner myReader = new Scanner(file);
                 ArrayList<Object[]> listRowData = new ArrayList<>();
                 while (myReader.hasNextLine()) {
-                    String data = myReader.nextLine();
-                    String[] splitedData = data.split(";");
-                    Object[] row = {splitedData[0], Integer.parseInt(splitedData[1]), Float.parseFloat(splitedData[2]), splitedData[3]};
+                    String line = myReader.nextLine();
+                    String[] splitedData = line.split(";");
+                    Object[] row = {
+                            splitedData[0],
+                            splitedData[1],
+                            Integer.parseInt(splitedData[2]),
+                            Float.parseFloat(splitedData[3]),
+                            splitedData[4]
+                    };
                     listRowData.add(row);
                 }
                 sortRowAndMakeTableWithResults(listRowData);
             } catch (FileNotFoundException e) {
-                System.out.println("Nie można odczytać wyników z pliku.");
+                JOptionPane.showMessageDialog(this, "Nie można otworzyć pliku z wynikami", "Błąd pliku", JOptionPane.WARNING_MESSAGE);
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Niepoprawne dane w pliku z wynikami",  "Błąd danych", JOptionPane.WARNING_MESSAGE);
             }
         }
     }

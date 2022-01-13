@@ -6,7 +6,7 @@ public class Validators {
             throw new InvalidEmptyGuessException();
         try {
             Integer newInt = Integer.parseInt(text);
-            if(newInt <= 0 || newInt > 10000)
+            if(newInt <= 0 || newInt > 8192)
                 throw new InvalidGuessValueException();
             return newInt;
         } catch (NumberFormatException exception) {
